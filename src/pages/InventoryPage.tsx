@@ -76,7 +76,7 @@ const InventoryPage: React.FC = () => {
       quantity: String(it.quantity), low_stock_threshold: String(it.low_stock_threshold),
       unit: it.unit || "ədəd",
     });
-    setOpen(true);
+    setTimeout(() => setOpen(true), 0);
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -235,10 +235,16 @@ const InventoryPage: React.FC = () => {
 
                 {/* Edit + Delete — yuxarı sağ künc */}
                 <div className="flex items-center gap-1 shrink-0">
-                  <button onClick={() => openEdit(it)} className="text-muted-foreground hover:text-primary p-1.5">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); openEdit(it); }}
+                    className="text-muted-foreground hover:text-primary p-2 rounded-lg active:bg-muted"
+                  >
                     <Edit3 className="w-4 h-4" />
                   </button>
-                  <button onClick={() => remove(it.id)} className="text-muted-foreground hover:text-destructive p-1.5">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); remove(it.id); }}
+                    className="text-muted-foreground hover:text-destructive p-2 rounded-lg active:bg-muted"
+                  >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -271,22 +277,22 @@ const InventoryPage: React.FC = () => {
       {/* Modal */}
       {open && (
         <div
-          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4 p-0"
           onClick={() => setOpen(false)}
         >
           <div
-            className="bg-card rounded-2xl w-full max-w-md p-6 animate-slide-up max-h-[90vh] overflow-y-auto"
+            className="bg-card sm:rounded-2xl rounded-t-2xl w-full sm:max-w-sm p-4 sm:p-5 animate-slide-up max-h-[75vh] sm:max-h-[80vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-foreground">{editing ? "Məhsulu redaktə et" : "Yeni məhsul"}</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-base font-bold text-foreground">{editing ? "Məhsulu redaktə et" : "Yeni məhsul"}</h2>
               <button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {!editing && (
-              <div className="flex gap-2 mb-4">
+              <div className="flex gap-2 mb-3">
                 <button
                   onClick={() => setBulkMode(false)}
                   className={`flex-1 py-1.5 text-xs font-semibold rounded-lg ${!bulkMode ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
@@ -302,10 +308,10 @@ const InventoryPage: React.FC = () => {
               </div>
             )}
 
-            <form onSubmit={submit} className="space-y-3">
+            <form onSubmit={submit} className="space-y-2">
               {bulkMode ? (
                 <>
-                  <p className="text-xs text-muted-foreground mb-2">
+                  <p className="text-xs text-muted-foreground mb-1">
                     Hər sətrə bir məhsul: <code>Ad, Qiymət, Miqdar</code> formatında yazın.
                   </p>
                   <textarea
@@ -313,7 +319,7 @@ const InventoryPage: React.FC = () => {
                     value={bulkText}
                     onChange={e => setBulkText(e.target.value)}
                     placeholder={"Alma, 2.50, 100\nArmud, 3.00, 50"}
-                    className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-sm min-h-[150px] focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    className="w-full px-3 py-2 rounded-xl bg-muted border border-border text-sm min-h-[120px] focus:outline-none focus:ring-2 focus:ring-primary/50"
                   />
                 </>
               ) : (
@@ -323,65 +329,65 @@ const InventoryPage: React.FC = () => {
                     value={form.name}
                     onChange={e => setForm({ ...form, name: e.target.value })}
                     placeholder="Məhsulun adı"
-                    className="w-full px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    className="w-full px-3 py-2 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                   />
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-2">
                     <input
                       value={form.sku}
                       onChange={e => setForm({ ...form, sku: e.target.value })}
                       placeholder="SKU"
-                      className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      className="px-3 py-2 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                     />
                     <input
                       value={form.category}
                       onChange={e => setForm({ ...form, category: e.target.value })}
                       placeholder="Kateqoriya"
-                      className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      className="px-3 py-2 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-2">
                     <input
                       type="number" step="0.01"
                       value={form.cost_price}
                       onChange={e => setForm({ ...form, cost_price: e.target.value })}
                       placeholder="Alış (₼)"
-                      className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      className="px-3 py-2 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                     />
                     <input
                       type="number" step="0.01" required
                       value={form.sell_price}
                       onChange={e => setForm({ ...form, sell_price: e.target.value })}
                       placeholder="Satış (₼)"
-                      className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      className="px-3 py-2 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                     />
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-3 gap-2">
                     <input
                       type="number" required
                       value={form.quantity}
                       onChange={e => setForm({ ...form, quantity: e.target.value })}
                       placeholder="Miqdar"
-                      className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      className="px-3 py-2 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                     />
                     <input
                       type="number"
                       value={form.low_stock_threshold}
                       onChange={e => setForm({ ...form, low_stock_threshold: e.target.value })}
                       placeholder="Min"
-                      className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      className="px-3 py-2 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                     />
                     <input
                       value={form.unit}
                       onChange={e => setForm({ ...form, unit: e.target.value })}
                       placeholder="Vahid"
-                      className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      className="px-3 py-2 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                     />
                   </div>
                 </>
               )}
               <button
                 type="submit"
-                className="w-full gradient-primary text-primary-foreground rounded-xl py-3 text-sm font-semibold hover:opacity-90 transition active:scale-95"
+                className="w-full gradient-primary text-primary-foreground rounded-xl py-2.5 text-sm font-semibold hover:opacity-90 transition active:scale-95 mt-1"
               >
                 {editing ? "Yadda saxla" : (bulkMode ? "Toplu Əlavə et" : "Əlavə et")}
               </button>

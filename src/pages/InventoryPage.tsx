@@ -3,7 +3,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Package, Plus, Trash2, AlertTriangle, X, Search, Edit3, Minus } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import logo from "@/assets/logo_main.svg";
 
 interface InvItem {
   id: string;
@@ -146,7 +145,8 @@ const InventoryPage: React.FC = () => {
   const totalValue = items.reduce((s, i) => s + i.quantity * i.sell_price, 0);
 
   return (
-    <div className="max-w-6xl mx-auto opacity-0 animate-fade-up">
+    // overflow-x-hidden əsas konteyner səviyyəsində horizontal scroll-u tam bağlayır
+    <div className="max-w-6xl mx-auto opacity-0 animate-fade-up overflow-x-hidden">
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground" style={{ lineHeight: "1.2" }}>Stok / Anbar</h1>
@@ -176,7 +176,12 @@ const InventoryPage: React.FC = () => {
       {/* Search */}
       <div className="relative mb-4">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Məhsul və ya SKU axtar..." className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Məhsul və ya SKU axtar..."
+          className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+        />
       </div>
 
       {/* List */}
@@ -188,77 +193,198 @@ const InventoryPage: React.FC = () => {
             <p className="text-foreground font-medium">Məhsul tapılmadı</p>
           </div>
         )}
+
         {filtered.map((it, idx) => {
           const low = it.quantity <= it.low_stock_threshold;
           return (
-            <div key={it.id} className={`flex items-center gap-3 p-4 ${idx !== filtered.length - 1 ? "border-b border-border" : ""}`}>
-              <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${low ? "bg-warning-yellow/20" : "bg-accent"}`}>
-                <Package className={`w-5 h-5 ${low ? "text-warning-yellow" : "text-accent-foreground"}`} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-foreground truncate">{it.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {it.sku && <>SKU: {it.sku} · </>}
-                  {it.sell_price.toFixed(2)} ₼ / {it.unit}
-                </p>
-                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                  {it.quantity < 10 && <span className="text-[10px] bg-destructive/10 text-destructive px-1.5 py-0.5 rounded font-semibold">Tükənmək üzrədir (&lt;10)</span>}
-                  {it.quantity >= 10 && it.quantity < 30 && <span className="text-[10px] bg-warning-yellow/10 text-warning-yellow-foreground px-1.5 py-0.5 rounded font-semibold">Satış sürəti yüksəkdir</span>}
-                  {it.quantity >= 30 && <span className="text-[10px] bg-success/10 text-success px-1.5 py-0.5 rounded font-semibold">Mövsümi artım gözlənilir</span>}
+            <div
+              key={it.id}
+              className={`p-4 ${idx !== filtered.length - 1 ? "border-b border-border" : ""}`}
+            >
+              {/* Yuxarı sətir: ikon + məlumat + edit/sil düymələri */}
+              <div className="flex items-start gap-3">
+                <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center ${low ? "bg-warning-yellow/20" : "bg-accent"}`}>
+                  <Package className={`w-5 h-5 ${low ? "text-warning-yellow" : "text-accent-foreground"}`} />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-foreground truncate">{it.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {it.sku && <>SKU: {it.sku} · </>}
+                    {it.sell_price.toFixed(2)} ₼ / {it.unit}
+                  </p>
+                  {/* Status badge */}
+                  <div className="mt-1">
+                    {it.quantity < 10 && (
+                      <span className="text-[10px] bg-destructive/10 text-destructive px-1.5 py-0.5 rounded font-semibold">
+                        Tükənmək üzrədir (&lt;10)
+                      </span>
+                    )}
+                    {it.quantity >= 10 && it.quantity < 30 && (
+                      <span className="text-[10px] bg-warning-yellow/10 text-warning-yellow-foreground px-1.5 py-0.5 rounded font-semibold">
+                        Satış sürəti yüksəkdir
+                      </span>
+                    )}
+                    {it.quantity >= 30 && (
+                      <span className="text-[10px] bg-success/10 text-success px-1.5 py-0.5 rounded font-semibold">
+                        Mövsümi artım gözlənilir
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Edit + Delete — yuxarı sağ künc */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <button onClick={() => openEdit(it)} className="text-muted-foreground hover:text-primary p-1.5">
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => remove(it.id)} className="text-muted-foreground hover:text-destructive p-1.5">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-1">
-                <button onClick={() => adjust(it, -1)} className="w-8 h-8 rounded-lg bg-muted hover:bg-border flex items-center justify-center"><Minus className="w-3.5 h-3.5" /></button>
-                <span className="w-12 text-center font-bold text-foreground">{it.quantity}</span>
-                <button onClick={() => adjust(it, 1)} className="w-8 h-8 rounded-lg bg-muted hover:bg-border flex items-center justify-center"><Plus className="w-3.5 h-3.5" /></button>
+
+              {/* Aşağı sətir: miqdar artır/azalt — tam genişliyi tutur, overflow olmur */}
+              <div className="flex items-center justify-between mt-3 pl-[52px]">
+                <span className="text-xs text-muted-foreground">Miqdar</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => adjust(it, -1)}
+                    className="w-8 h-8 rounded-lg bg-muted hover:bg-border flex items-center justify-center"
+                  >
+                    <Minus className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="w-10 text-center font-bold text-foreground tabular-nums">{it.quantity}</span>
+                  <button
+                    onClick={() => adjust(it, 1)}
+                    className="w-8 h-8 rounded-lg bg-muted hover:bg-border flex items-center justify-center"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-              <button onClick={() => openEdit(it)} className="text-muted-foreground hover:text-primary p-1"><Edit3 className="w-4 h-4" /></button>
-              <button onClick={() => remove(it.id)} className="text-muted-foreground hover:text-destructive p-1"><Trash2 className="w-4 h-4" /></button>
             </div>
           );
         })}
       </div>
 
+      {/* Modal */}
       {open && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onClick={() => setOpen(false)}>
-          <div className="bg-card rounded-2xl w-full max-w-md p-6 animate-slide-up max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="bg-card rounded-2xl w-full max-w-md p-6 animate-slide-up max-h-[90vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-foreground">{editing ? "Məhsulu redaktə et" : "Yeni məhsul"}</h2>
-              <button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
+              <button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            
+
             {!editing && (
               <div className="flex gap-2 mb-4">
-                <button onClick={() => setBulkMode(false)} className={`flex-1 py-1.5 text-xs font-semibold rounded-lg ${!bulkMode ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>Tək-tək</button>
-                <button onClick={() => setBulkMode(true)} className={`flex-1 py-1.5 text-xs font-semibold rounded-lg ${bulkMode ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>Toplu əlavə</button>
+                <button
+                  onClick={() => setBulkMode(false)}
+                  className={`flex-1 py-1.5 text-xs font-semibold rounded-lg ${!bulkMode ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+                >
+                  Tək-tək
+                </button>
+                <button
+                  onClick={() => setBulkMode(true)}
+                  className={`flex-1 py-1.5 text-xs font-semibold rounded-lg ${bulkMode ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+                >
+                  Toplu əlavə
+                </button>
               </div>
             )}
 
             <form onSubmit={submit} className="space-y-3">
               {bulkMode ? (
                 <>
-                  <p className="text-xs text-muted-foreground mb-2">Hər sətrə bir məhsul: <code>Ad, Qiymət, Miqdar</code> formatında yazın.</p>
-                  <textarea required value={bulkText} onChange={e => setBulkText(e.target.value)} placeholder="Alma, 2.50, 100&#10;Armud, 3.00, 50" className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-sm min-h-[150px] focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Hər sətrə bir məhsul: <code>Ad, Qiymət, Miqdar</code> formatında yazın.
+                  </p>
+                  <textarea
+                    required
+                    value={bulkText}
+                    onChange={e => setBulkText(e.target.value)}
+                    placeholder={"Alma, 2.50, 100\nArmud, 3.00, 50"}
+                    className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-sm min-h-[150px] focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
                 </>
               ) : (
                 <>
-                  <input required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Məhsulun adı" className="w-full px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                  <input
+                    required
+                    value={form.name}
+                    onChange={e => setForm({ ...form, name: e.target.value })}
+                    placeholder="Məhsulun adı"
+                    className="w-full px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
                   <div className="grid grid-cols-2 gap-3">
-                    <input value={form.sku} onChange={e => setForm({ ...form, sku: e.target.value })} placeholder="SKU" className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
-                    <input value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} placeholder="Kateqoriya" className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                    <input
+                      value={form.sku}
+                      onChange={e => setForm({ ...form, sku: e.target.value })}
+                      placeholder="SKU"
+                      className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    />
+                    <input
+                      value={form.category}
+                      onChange={e => setForm({ ...form, category: e.target.value })}
+                      placeholder="Kateqoriya"
+                      className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <input type="number" step="0.01" value={form.cost_price} onChange={e => setForm({ ...form, cost_price: e.target.value })} placeholder="Alış (₼)" className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
-                    <input type="number" step="0.01" required value={form.sell_price} onChange={e => setForm({ ...form, sell_price: e.target.value })} placeholder="Satış (₼)" className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                    <input
+                      type="number" step="0.01"
+                      value={form.cost_price}
+                      onChange={e => setForm({ ...form, cost_price: e.target.value })}
+                      placeholder="Alış (₼)"
+                      className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    />
+                    <input
+                      type="number" step="0.01" required
+                      value={form.sell_price}
+                      onChange={e => setForm({ ...form, sell_price: e.target.value })}
+                      placeholder="Satış (₼)"
+                      className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    />
                   </div>
                   <div className="grid grid-cols-3 gap-3">
-                    <input type="number" required value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="Miqdar" className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
-                    <input type="number" value={form.low_stock_threshold} onChange={e => setForm({ ...form, low_stock_threshold: e.target.value })} placeholder="Min" className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
-                    <input value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} placeholder="Vahid" className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                    <input
+                      type="number" required
+                      value={form.quantity}
+                      onChange={e => setForm({ ...form, quantity: e.target.value })}
+                      placeholder="Miqdar"
+                      className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    />
+                    <input
+                      type="number"
+                      value={form.low_stock_threshold}
+                      onChange={e => setForm({ ...form, low_stock_threshold: e.target.value })}
+                      placeholder="Min"
+                      className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    />
+                    <input
+                      value={form.unit}
+                      onChange={e => setForm({ ...form, unit: e.target.value })}
+                      placeholder="Vahid"
+                      className="px-4 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    />
                   </div>
                 </>
               )}
-              <button type="submit" className="w-full gradient-primary text-primary-foreground rounded-xl py-3 text-sm font-semibold hover:opacity-90 transition active:scale-95">{editing ? "Yadda saxla" : (bulkMode ? "Toplu Əlavə et" : "Əlavə et")}</button>
+              <button
+                type="submit"
+                className="w-full gradient-primary text-primary-foreground rounded-xl py-3 text-sm font-semibold hover:opacity-90 transition active:scale-95"
+              >
+                {editing ? "Yadda saxla" : (bulkMode ? "Toplu Əlavə et" : "Əlavə et")}
+              </button>
             </form>
           </div>
         </div>

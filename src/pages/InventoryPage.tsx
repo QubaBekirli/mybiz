@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import ReactDOM from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Package, Plus, Trash2, AlertTriangle, X, Search, Edit3, Minus } from "lucide-react";
@@ -27,6 +28,39 @@ const DEFAULT_ITEMS = [
   { name: "Şirə", sku: "SIR-01", category: "İçkilər", cost_price: 0.40, sell_price: 1.00, quantity: 90, low_stock_threshold: 20, unit: "stəkan" },
 ];
 
+// ─── Portal Modal ────────────────────────────────────────────────────────────
+interface ModalProps {
+  onClose: () => void;
+  children: React.ReactNode;
+}
+
+const Modal: React.FC<ModalProps> = ({ onClose, children }) => {
+  // body scroll-u bağla
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  return ReactDOM.createPortal(
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 9999 }}
+      className="flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-card rounded-2xl w-full p-4 overflow-y-auto"
+        style={{ maxWidth: 400, maxHeight: "85vh" }}
+        onClick={e => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+// ─── Main Page ───────────────────────────────────────────────────────────────
 const InventoryPage: React.FC = () => {
   const { user } = useAuth();
   const [items, setItems] = useState<InvItem[]>([]);
@@ -67,17 +101,24 @@ const InventoryPage: React.FC = () => {
 
   const resetForm = () => setForm({ name: "", sku: "", category: "", cost_price: "", sell_price: "", quantity: "", low_stock_threshold: "5", unit: "ədəd" });
 
-  const openNew = () => { setEditing(null); resetForm(); setOpen(true); };
+  const openNew = () => { setEditing(null); resetForm(); setBulkMode(false); setOpen(true); };
+
   const openEdit = (it: InvItem) => {
     setEditing(it);
     setForm({
-      name: it.name, sku: it.sku || "", category: it.category || "",
-      cost_price: String(it.cost_price), sell_price: String(it.sell_price),
-      quantity: String(it.quantity), low_stock_threshold: String(it.low_stock_threshold),
+      name: it.name,
+      sku: it.sku || "",
+      category: it.category || "",
+      cost_price: String(it.cost_price),
+      sell_price: String(it.sell_price),
+      quantity: String(it.quantity),
+      low_stock_threshold: String(it.low_stock_threshold),
       unit: it.unit || "ədəd",
     });
-    setTimeout(() => setOpen(true), 0);
+    setOpen(true);
   };
+
+  const closeModal = () => { setOpen(false); setEditing(null); resetForm(); };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,24 +127,16 @@ const InventoryPage: React.FC = () => {
       const lines = bulkText.split("\n").filter(l => l.trim().length > 0);
       const payloads = lines.map(line => {
         const parts = line.split(",").map(p => p.trim());
-        return {
-          owner_id: user.id,
-          name: parts[0] || "Bilinməyən",
-          sell_price: Number(parts[1]) || 0,
-          quantity: parseInt(parts[2]) || 0,
-          low_stock_threshold: 5,
-          unit: "ədəd"
-        };
+        return { owner_id: user.id, name: parts[0] || "Bilinməyən", sell_price: Number(parts[1]) || 0, quantity: parseInt(parts[2]) || 0, low_stock_threshold: 5, unit: "ədəd" };
       });
       if (payloads.length > 0) {
         const { error } = await supabase.from("inventory").insert(payloads);
         if (error) return toast({ title: "Xəta", description: error.message, variant: "destructive" });
         toast({ title: `${payloads.length} məhsul əlavə edildi` });
       }
-      setOpen(false); resetForm(); setBulkText(""); load();
+      closeModal(); setBulkText(""); load();
       return;
     }
-
     const payload = {
       owner_id: user.id,
       name: form.name,
@@ -120,7 +153,7 @@ const InventoryPage: React.FC = () => {
       : await supabase.from("inventory").insert(payload);
     if (error) return toast({ title: "Xəta", description: error.message, variant: "destructive" });
     toast({ title: editing ? "Yeniləndi" : "Əlavə edildi" });
-    setOpen(false); resetForm(); setEditing(null); load();
+    closeModal(); load();
   };
 
   const remove = async (id: string) => {
@@ -144,9 +177,11 @@ const InventoryPage: React.FC = () => {
   const lowStock = items.filter(i => i.quantity <= i.low_stock_threshold);
   const totalValue = items.reduce((s, i) => s + i.quantity * i.sell_price, 0);
 
+  const inputCls = "w-full px-3 py-2 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50";
+
   return (
-    // overflow-x-hidden əsas konteyner səviyyəsində horizontal scroll-u tam bağlayır
     <div className="max-w-6xl mx-auto opacity-0 animate-fade-up overflow-x-hidden">
+      {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground" style={{ lineHeight: "1.2" }}>Stok / Anbar</h1>
@@ -168,7 +203,9 @@ const InventoryPage: React.FC = () => {
           <p className="text-2xl font-bold text-gradient mt-1">{totalValue.toFixed(2)} ₼</p>
         </div>
         <div className="bg-card rounded-2xl card-shadow p-4 col-span-2 md:col-span-1">
-          <p className="text-xs text-muted-foreground flex items-center gap-1"><AlertTriangle className="w-3 h-3 text-warning-yellow" />Az qalan</p>
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <AlertTriangle className="w-3 h-3 text-warning-yellow" />Az qalan
+          </p>
           <p className="text-2xl font-bold text-warning-yellow mt-1">{lowStock.length}</p>
         </div>
       </div>
@@ -193,78 +230,44 @@ const InventoryPage: React.FC = () => {
             <p className="text-foreground font-medium">Məhsul tapılmadı</p>
           </div>
         )}
-
         {filtered.map((it, idx) => {
           const low = it.quantity <= it.low_stock_threshold;
           return (
-            <div
-              key={it.id}
-              className={`p-4 ${idx !== filtered.length - 1 ? "border-b border-border" : ""}`}
-            >
-              {/* Yuxarı sətir: ikon + məlumat + edit/sil düymələri */}
+            <div key={it.id} className={`p-4 ${idx !== filtered.length - 1 ? "border-b border-border" : ""}`}>
+              {/* Row 1: icon + info + actions */}
               <div className="flex items-start gap-3">
                 <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center ${low ? "bg-warning-yellow/20" : "bg-accent"}`}>
                   <Package className={`w-5 h-5 ${low ? "text-warning-yellow" : "text-accent-foreground"}`} />
                 </div>
-
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-foreground truncate">{it.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {it.sku && <>SKU: {it.sku} · </>}
-                    {it.sell_price.toFixed(2)} ₼ / {it.unit}
+                    {it.sku && <>SKU: {it.sku} · </>}{it.sell_price.toFixed(2)} ₼ / {it.unit}
                   </p>
-                  {/* Status badge */}
                   <div className="mt-1">
-                    {it.quantity < 10 && (
-                      <span className="text-[10px] bg-destructive/10 text-destructive px-1.5 py-0.5 rounded font-semibold">
-                        Tükənmək üzrədir (&lt;10)
-                      </span>
-                    )}
-                    {it.quantity >= 10 && it.quantity < 30 && (
-                      <span className="text-[10px] bg-warning-yellow/10 text-warning-yellow-foreground px-1.5 py-0.5 rounded font-semibold">
-                        Satış sürəti yüksəkdir
-                      </span>
-                    )}
-                    {it.quantity >= 30 && (
-                      <span className="text-[10px] bg-success/10 text-success px-1.5 py-0.5 rounded font-semibold">
-                        Mövsümi artım gözlənilir
-                      </span>
-                    )}
+                    {it.quantity < 10 && <span className="text-[10px] bg-destructive/10 text-destructive px-1.5 py-0.5 rounded font-semibold">Tükənmək üzrədir (&lt;10)</span>}
+                    {it.quantity >= 10 && it.quantity < 30 && <span className="text-[10px] bg-warning-yellow/10 text-warning-yellow-foreground px-1.5 py-0.5 rounded font-semibold">Satış sürəti yüksəkdir</span>}
+                    {it.quantity >= 30 && <span className="text-[10px] bg-success/10 text-success px-1.5 py-0.5 rounded font-semibold">Mövsümi artım gözlənilir</span>}
                   </div>
                 </div>
-
-                {/* Edit + Delete — yuxarı sağ künc */}
                 <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); openEdit(it); }}
-                    className="text-muted-foreground hover:text-primary p-2 rounded-lg active:bg-muted"
-                  >
+                  <button onClick={(e) => { e.stopPropagation(); openEdit(it); }} className="text-muted-foreground hover:text-primary p-2 rounded-lg active:bg-muted">
                     <Edit3 className="w-4 h-4" />
                   </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); remove(it.id); }}
-                    className="text-muted-foreground hover:text-destructive p-2 rounded-lg active:bg-muted"
-                  >
+                  <button onClick={(e) => { e.stopPropagation(); remove(it.id); }} className="text-muted-foreground hover:text-destructive p-2 rounded-lg active:bg-muted">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>
-
-              {/* Aşağı sətir: miqdar artır/azalt — tam genişliyi tutur, overflow olmur */}
+              {/* Row 2: quantity controls */}
               <div className="flex items-center justify-between mt-3 pl-[52px]">
                 <span className="text-xs text-muted-foreground">Miqdar</span>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => adjust(it, -1)}
-                    className="w-8 h-8 rounded-lg bg-muted hover:bg-border flex items-center justify-center"
-                  >
+                  <button onClick={() => adjust(it, -1)} className="w-8 h-8 rounded-lg bg-muted hover:bg-border flex items-center justify-center">
                     <Minus className="w-3.5 h-3.5" />
                   </button>
                   <span className="w-10 text-center font-bold text-foreground tabular-nums">{it.quantity}</span>
-                  <button
-                    onClick={() => adjust(it, 1)}
-                    className="w-8 h-8 rounded-lg bg-muted hover:bg-border flex items-center justify-center"
-                  >
+                  <button onClick={() => adjust(it, 1)} className="w-8 h-8 rounded-lg bg-muted hover:bg-border flex items-center justify-center">
                     <Plus className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -274,126 +277,58 @@ const InventoryPage: React.FC = () => {
         })}
       </div>
 
-      {/* Modal */}
+      {/* ── Portal Modal ── */}
       {open && (
-        <div
-          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4 p-0"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="bg-card sm:rounded-2xl rounded-t-2xl w-full sm:max-w-sm p-4 sm:p-5 animate-slide-up max-h-[75vh] sm:max-h-[80vh] overflow-y-auto"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-bold text-foreground">{editing ? "Məhsulu redaktə et" : "Yeni məhsul"}</h2>
-              <button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {!editing && (
-              <div className="flex gap-2 mb-3">
-                <button
-                  onClick={() => setBulkMode(false)}
-                  className={`flex-1 py-1.5 text-xs font-semibold rounded-lg ${!bulkMode ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
-                >
-                  Tək-tək
-                </button>
-                <button
-                  onClick={() => setBulkMode(true)}
-                  className={`flex-1 py-1.5 text-xs font-semibold rounded-lg ${bulkMode ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
-                >
-                  Toplu əlavə
-                </button>
-              </div>
-            )}
-
-            <form onSubmit={submit} className="space-y-2">
-              {bulkMode ? (
-                <>
-                  <p className="text-xs text-muted-foreground mb-1">
-                    Hər sətrə bir məhsul: <code>Ad, Qiymət, Miqdar</code> formatında yazın.
-                  </p>
-                  <textarea
-                    required
-                    value={bulkText}
-                    onChange={e => setBulkText(e.target.value)}
-                    placeholder={"Alma, 2.50, 100\nArmud, 3.00, 50"}
-                    className="w-full px-3 py-2 rounded-xl bg-muted border border-border text-sm min-h-[120px] focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                </>
-              ) : (
-                <>
-                  <input
-                    required
-                    value={form.name}
-                    onChange={e => setForm({ ...form, name: e.target.value })}
-                    placeholder="Məhsulun adı"
-                    className="w-full px-3 py-2 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      value={form.sku}
-                      onChange={e => setForm({ ...form, sku: e.target.value })}
-                      placeholder="SKU"
-                      className="px-3 py-2 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    />
-                    <input
-                      value={form.category}
-                      onChange={e => setForm({ ...form, category: e.target.value })}
-                      placeholder="Kateqoriya"
-                      className="px-3 py-2 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="number" step="0.01"
-                      value={form.cost_price}
-                      onChange={e => setForm({ ...form, cost_price: e.target.value })}
-                      placeholder="Alış (₼)"
-                      className="px-3 py-2 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    />
-                    <input
-                      type="number" step="0.01" required
-                      value={form.sell_price}
-                      onChange={e => setForm({ ...form, sell_price: e.target.value })}
-                      placeholder="Satış (₼)"
-                      className="px-3 py-2 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    />
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <input
-                      type="number" required
-                      value={form.quantity}
-                      onChange={e => setForm({ ...form, quantity: e.target.value })}
-                      placeholder="Miqdar"
-                      className="px-3 py-2 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    />
-                    <input
-                      type="number"
-                      value={form.low_stock_threshold}
-                      onChange={e => setForm({ ...form, low_stock_threshold: e.target.value })}
-                      placeholder="Min"
-                      className="px-3 py-2 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    />
-                    <input
-                      value={form.unit}
-                      onChange={e => setForm({ ...form, unit: e.target.value })}
-                      placeholder="Vahid"
-                      className="px-3 py-2 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    />
-                  </div>
-                </>
-              )}
-              <button
-                type="submit"
-                className="w-full gradient-primary text-primary-foreground rounded-xl py-2.5 text-sm font-semibold hover:opacity-90 transition active:scale-95 mt-1"
-              >
-                {editing ? "Yadda saxla" : (bulkMode ? "Toplu Əlavə et" : "Əlavə et")}
-              </button>
-            </form>
+        <Modal onClose={closeModal}>
+          {/* Title */}
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-bold text-foreground">
+              {editing ? "Məhsulu redaktə et" : "Yeni məhsul"}
+            </h2>
+            <button onClick={closeModal} className="text-muted-foreground hover:text-foreground p-1">
+              <X className="w-5 h-5" />
+            </button>
           </div>
-        </div>
+
+          {/* Bulk toggle — only for new */}
+          {!editing && (
+            <div className="flex gap-2 mb-3">
+              <button onClick={() => setBulkMode(false)} className={`flex-1 py-1.5 text-xs font-semibold rounded-lg ${!bulkMode ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>Tək-tək</button>
+              <button onClick={() => setBulkMode(true)} className={`flex-1 py-1.5 text-xs font-semibold rounded-lg ${bulkMode ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>Toplu əlavə</button>
+            </div>
+          )}
+
+          <form onSubmit={submit} className="space-y-2">
+            {bulkMode ? (
+              <>
+                <p className="text-xs text-muted-foreground">Hər sətrə: <code>Ad, Qiymət, Miqdar</code></p>
+                <textarea required value={bulkText} onChange={e => setBulkText(e.target.value)}
+                  placeholder={"Alma, 2.50, 100\nArmud, 3.00, 50"}
+                  className={`${inputCls} min-h-[110px]`} />
+              </>
+            ) : (
+              <>
+                <input required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Məhsulun adı" className={inputCls} />
+                <div className="grid grid-cols-2 gap-2">
+                  <input value={form.sku} onChange={e => setForm({ ...form, sku: e.target.value })} placeholder="SKU" className={inputCls} />
+                  <input value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} placeholder="Kateqoriya" className={inputCls} />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="number" step="0.01" value={form.cost_price} onChange={e => setForm({ ...form, cost_price: e.target.value })} placeholder="Alış (₼)" className={inputCls} />
+                  <input type="number" step="0.01" required value={form.sell_price} onChange={e => setForm({ ...form, sell_price: e.target.value })} placeholder="Satış (₼)" className={inputCls} />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <input type="number" required value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="Miqdar" className={inputCls} />
+                  <input type="number" value={form.low_stock_threshold} onChange={e => setForm({ ...form, low_stock_threshold: e.target.value })} placeholder="Min" className={inputCls} />
+                  <input value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} placeholder="Vahid" className={inputCls} />
+                </div>
+              </>
+            )}
+            <button type="submit" className="w-full gradient-primary text-primary-foreground rounded-xl py-2.5 text-sm font-semibold hover:opacity-90 transition active:scale-95 mt-1">
+              {editing ? "Yadda saxla" : (bulkMode ? "Toplu Əlavə et" : "Əlavə et")}
+            </button>
+          </form>
+        </Modal>
       )}
     </div>
   );

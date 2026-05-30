@@ -17,6 +17,17 @@ interface InvItem {
   unit: string | null;
 }
 
+const DEFAULT_ITEMS = [
+  { name: "Kruassan", sku: "KRS-01", category: "Şirniyyat", cost_price: 0.80, sell_price: 1.50, quantity: 120, low_stock_threshold: 20, unit: "ədəd" },
+  { name: "Tort", sku: "TRT-01", category: "Şirniyyat", cost_price: 5.00, sell_price: 9.00, quantity: 15, low_stock_threshold: 5, unit: "ədəd" },
+  { name: "Çay", sku: "CAY-01", category: "İçkilər", cost_price: 0.30, sell_price: 0.80, quantity: 200, low_stock_threshold: 30, unit: "stəkan" },
+  { name: "Qəhvə", sku: "QHV-01", category: "İçkilər", cost_price: 0.60, sell_price: 1.50, quantity: 180, low_stock_threshold: 30, unit: "stəkan" },
+  { name: "Çörək", sku: "CRK-01", category: "Çörək-Bulka", cost_price: 0.20, sell_price: 0.50, quantity: 300, low_stock_threshold: 50, unit: "ədəd" },
+  { name: "Bulka", sku: "BLK-01", category: "Çörək-Bulka", cost_price: 0.15, sell_price: 0.40, quantity: 250, low_stock_threshold: 40, unit: "ədəd" },
+  { name: "Salat", sku: "SLT-01", category: "Yeməklər", cost_price: 1.50, sell_price: 3.50, quantity: 40, low_stock_threshold: 10, unit: "porsiya" },
+  { name: "Şirə", sku: "SIR-01", category: "İçkilər", cost_price: 0.40, sell_price: 1.00, quantity: 90, low_stock_threshold: 20, unit: "stəkan" },
+];
+
 const InventoryPage: React.FC = () => {
   const { user } = useAuth();
   const [items, setItems] = useState<InvItem[]>([]);
@@ -32,8 +43,24 @@ const InventoryPage: React.FC = () => {
     if (!user) return;
     setLoading(true);
     const { data, error } = await supabase.from("inventory").select("*").order("created_at", { ascending: false });
-    if (error) toast({ title: "Xəta", description: error.message, variant: "destructive" });
-    else setItems(data as InvItem[]);
+    if (error) {
+      toast({ title: "Xəta", description: error.message, variant: "destructive" });
+      setLoading(false);
+      return;
+    }
+    if (!data || data.length === 0) {
+      const payloads = DEFAULT_ITEMS.map(item => ({ ...item, owner_id: user.id }));
+      const { error: insertError } = await supabase.from("inventory").insert(payloads);
+      if (insertError) {
+        toast({ title: "Xəta", description: insertError.message, variant: "destructive" });
+        setLoading(false);
+        return;
+      }
+      const { data: fresh } = await supabase.from("inventory").select("*").order("created_at", { ascending: false });
+      setItems((fresh as InvItem[]) || []);
+    } else {
+      setItems(data as InvItem[]);
+    }
     setLoading(false);
   };
 

@@ -1,20 +1,15 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { PieChart as RPieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, AreaChart, Area, ReferenceDot } from "recharts";
-import { ArrowLeft, TrendingUp, Crown, Star, Package, CalendarDays } from "lucide-react";
+import { ArrowLeft, TrendingUp, Crown, Star, Package, CalendarDays, Tag } from "lucide-react";
 import { format } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const COLORS = ["#7c3aed", "#60a5fa", "#34d399", "#fb923c", "#9ca3af", "#f472b6", "#fbbf24"];
 
-type Period = "day" | "week" | "month" | "year" | "custom";
-const PERIODS: { id: Period; label: string }[] = [
-  { id: "day", label: "Gün" }, { id: "week", label: "Həftə" }, { id: "month", label: "Ay" },
-  { id: "year", label: "İl" }, { id: "custom", label: "Xüsusi" },
-];
-
-// Mock catalog
 const CATEGORIES: { name: string; value: number; profit: number; products: { name: string; value: number }[] }[] = [
   { name: "Şirniyyat", value: 45.2, profit: 2451, products: [
     { name: "Kruassan", value: 35.1 }, { name: "Tort", value: 22.8 }, { name: "Piroq", value: 15.3 },
@@ -34,20 +29,48 @@ const CATEGORIES: { name: string; value: number; profit: number; products: { nam
   ]},
 ];
 
-// Hourly mock — peak 10-12
 function hourlyData(seed = 1) {
   const base = [2,1,1,0,0,3,8,30,180,360,440,420,300,180,140,200,260,320,280,230,180,90,40,20];
   return base.map((v, h) => ({ hour: `${String(h).padStart(2,"0")}:00`, value: Math.round(v * seed) }));
 }
 
+interface InvItem {
+  id: string;
+  name: string;
+  sell_price: number;
+  cost_price: number;
+  quantity: number;
+  category: string | null;
+  unit: string | null;
+}
+
 const StockAnalytics: React.FC = () => {
+  const { user } = useAuth();
   const [selectedCat, setSelectedCat] = useState<number | null>(null);
   const [selectedProd, setSelectedProd] = useState<number | null>(null);
-  const [period, setPeriod] = useState<Period>("month");
-  const [customRange, setCustomRange] = useState<{ from?: Date; to?: Date }>({});
   const [pieDate, setPieDate] = useState<{ from?: Date; to?: Date }>({});
   const [hiddenCats, setHiddenCats] = useState<Set<string>>(new Set());
   const [hiddenProds, setHiddenProds] = useState<Set<string>>(new Set());
+
+  const [invItems, setInvItems] = useState<InvItem[]>([]);
+  const [selectedItemId, setSelectedItemId] = useState<string>("");
+  const [priceSlider, setPriceSlider] = useState<number>(0);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("inventory").select("id,name,sell_price,cost_price,quantity,category,unit")
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setInvItems(data as InvItem[]);
+          setSelectedItemId((data as InvItem[])[0].id);
+        }
+      });
+  }, [user?.id]);
+
+  const selectedItem = invItems.find(i => i.id === selectedItemId) || null;
+  const newPrice = selectedItem ? Math.max(0, selectedItem.sell_price * (1 + priceSlider / 100)) : 0;
+  const priceDiff = selectedItem ? newPrice - selectedItem.sell_price : 0;
 
   const topCat = CATEGORIES[0];
   const topProd = useMemo(() => {
@@ -65,13 +88,9 @@ const StockAnalytics: React.FC = () => {
     : [];
 
   const hourly = useMemo(() => hourlyData(selectedProd !== null ? 0.6 : selectedCat !== null ? 0.85 : 1), [selectedCat, selectedProd]);
-  const peak = useMemo(() => {
-    const m = hourly.reduce((a, b) => b.value > a.value ? b : a, hourly[0]);
-    return m;
-  }, [hourly]);
+  const peak = useMemo(() => hourly.reduce((a, b) => b.value > a.value ? b : a, hourly[0]), [hourly]);
 
   const toggleCat = (name: string) => setHiddenCats(s => { const n = new Set(s); n.has(name) ? n.delete(name) : n.add(name); return n; });
-  const toggleProd = (name: string) => setHiddenProds(s => { const n = new Set(s); n.has(name) ? n.delete(name) : n.add(name); return n; });
 
   return (
     <div className="space-y-5">
@@ -101,7 +120,6 @@ const StockAnalytics: React.FC = () => {
 
       {/* Drill-down area */}
       <div className="bg-card rounded-2xl card-shadow p-5">
-        {/* Header with back button */}
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2 min-w-0">
             {(selectedCat !== null) && (
@@ -123,7 +141,6 @@ const StockAnalytics: React.FC = () => {
           </div>
         </div>
 
-        {/* Donut: categories */}
         {selectedCat === null && (
           <>
             <DateMini range={pieDate} onChange={setPieDate} />
@@ -164,7 +181,6 @@ const StockAnalytics: React.FC = () => {
           </>
         )}
 
-        {/* Bar: products */}
         {selectedCat !== null && selectedProd === null && (
           <ResponsiveContainer width="100%" height={Math.max(200, productBarData.length * 36 + 40)}>
             <BarChart data={productBarData} layout="vertical" margin={{ left: 10, right: 30 }}>
@@ -172,12 +188,8 @@ const StockAnalytics: React.FC = () => {
               <XAxis type="number" hide />
               <YAxis dataKey="name" type="category" tick={{ fontSize: 12, cursor: "pointer" }} stroke="hsl(0,0%,33%)" width={80}
                 onClick={(e: any) => {
-                  const visible = CATEGORIES[selectedCat].products.filter(p => !hiddenProds.has(p.name));
-                  const idx = visible.findIndex(p => p.name === e.value);
-                  if (idx >= 0) {
-                    const real = CATEGORIES[selectedCat].products.findIndex(p => p.name === e.value);
-                    setSelectedProd(real);
-                  }
+                  const real = CATEGORIES[selectedCat].products.findIndex(p => p.name === e.value);
+                  if (real >= 0) setSelectedProd(real);
                 }} />
               <Tooltip formatter={(v: number) => `${v}%`} />
               <Bar dataKey="value" fill={COLORS[0]} radius={[0, 6, 6, 0]} style={{ cursor: "pointer" }}
@@ -191,7 +203,6 @@ const StockAnalytics: React.FC = () => {
           </ResponsiveContainer>
         )}
 
-        {/* Per-product hourly when drilled deepest */}
         {selectedCat !== null && selectedProd !== null && (
           <ResponsiveContainer width="100%" height={240}>
             <AreaChart data={hourly}>
@@ -211,43 +222,79 @@ const StockAnalytics: React.FC = () => {
         )}
       </div>
 
-      {/* Always-on Saat Səviyyəsi */}
+      {/* Qiymət Dəyişdirici — inventory məhsullarına əsasən */}
       <div className="bg-card rounded-2xl card-shadow p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-foreground text-sm flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-secondary" />Saat Səviyyəsi
-          </h2>
-          <span className="text-[11px] text-muted-foreground">ən çox satış <b className="text-secondary">{peak.hour} - {hourly[(hourly.indexOf(peak)+2) % 24].hour}</b></span>
-        </div>
+        <h2 className="font-semibold text-foreground text-sm flex items-center gap-2 mb-4">
+          <Tag className="w-4 h-4 text-secondary" />Qiymət Dəyişdirici
+        </h2>
 
-        <div className="flex flex-wrap gap-2 mb-4">
-          {PERIODS.map(p => (
-            <button key={p.id} onClick={() => setPeriod(p.id)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${period === p.id ? "gradient-primary text-primary-foreground shadow-md" : "bg-muted text-foreground hover:bg-muted/70"}`}>
-              {p.label}
-            </button>
-          ))}
-        </div>
-        {period === "custom" && (
-          <div className="mb-3"><DateMini range={customRange} onChange={setCustomRange} /></div>
+        {invItems.length === 0 ? (
+          <div className="text-center py-8">
+            <Package className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">Stokda məhsul yoxdur</p>
+          </div>
+        ) : (
+          <>
+            <div className="mb-4">
+              <p className="text-xs text-muted-foreground mb-1.5">Məhsul seçin:</p>
+              <select
+                value={selectedItemId}
+                onChange={e => { setSelectedItemId(e.target.value); setPriceSlider(0); }}
+                className="w-full px-3 py-2.5 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              >
+                {invItems.map(i => (
+                  <option key={i.id} value={i.id}>{i.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {selectedItem && (
+              <>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-xs text-muted-foreground">Cari qiymət:</span>
+                  <span className="text-base font-bold text-foreground">{selectedItem.sell_price.toFixed(2)} ₼</span>
+                </div>
+
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-muted-foreground">Qiyməti dəyişdirin:</span>
+                    <span className={`text-sm font-bold ${priceSlider >= 0 ? "text-success" : "text-destructive"}`}>
+                      {priceSlider >= 0 ? "+" : ""}{priceSlider}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={-20}
+                    max={20}
+                    step={1}
+                    value={priceSlider}
+                    onChange={e => setPriceSlider(Number(e.target.value))}
+                    className="w-full accent-primary h-2 rounded-full cursor-pointer"
+                    style={{
+                      background: `linear-gradient(to right, hsl(var(--primary)) 0%, hsl(var(--primary)) ${((priceSlider + 20) / 40) * 100}%, hsl(var(--muted)) ${((priceSlider + 20) / 40) * 100}%, hsl(var(--muted)) 100%)`
+                    }}
+                  />
+                  <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+                    <span>-20%</span><span>-10%</span><span>0%</span><span>+10%</span><span>+20%</span>
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-muted/40 border border-border p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-muted-foreground">Yeni qiymət:</span>
+                    <span className="text-xl font-bold text-foreground">{newPrice.toFixed(2)} ₼</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Dəyişiklik:</span>
+                    <span className={`text-sm font-semibold ${priceDiff >= 0 ? "text-success" : "text-destructive"}`}>
+                      {priceDiff >= 0 ? "+" : ""}{priceDiff.toFixed(2)} ₼ ({priceSlider >= 0 ? "+" : ""}{priceSlider}%)
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
+          </>
         )}
-
-        <ResponsiveContainer width="100%" height={220}>
-          <AreaChart data={hourly}>
-            <defs>
-              <linearGradient id="hg" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={COLORS[0]} stopOpacity={0.45} />
-                <stop offset="100%" stopColor={COLORS[0]} stopOpacity={0.03} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(220,20%,90%)" />
-            <XAxis dataKey="hour" tick={{ fontSize: 10 }} stroke="hsl(0,0%,33%)" interval={3} />
-            <YAxis tick={{ fontSize: 10 }} stroke="hsl(0,0%,33%)" />
-            <Tooltip />
-            <Area type="monotone" dataKey="value" stroke={COLORS[0]} fill="url(#hg)" strokeWidth={2} dot={false} />
-            <ReferenceDot x={peak.hour} y={peak.value} r={5} fill={COLORS[0]} stroke="hsl(var(--card))" strokeWidth={2} />
-          </AreaChart>
-        </ResponsiveContainer>
       </div>
     </div>
   );
